@@ -1,0 +1,9 @@
+{
+  "name": "full-de-musica-tv3",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Panell de Premiere Pro per generar el full de música",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

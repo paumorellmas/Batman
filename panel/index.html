@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<title>Full de música TV3</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <button id="btnLoad" class="primary">Llegir seqüència activa</button>
+  <span id="seqName" class="muted">Cap seqüència llegida</span>
+</header>
+
+<p id="message" class="message" hidden></p>
+
+<section id="tracksBox" hidden>
+  <h2>Pistes amb música</h2>
+  <div id="tracks"></div>
+  <label class="gap">Separació màxima per comptar-ho com la mateixa música seguida
+    <input id="gap" type="number" min="0" max="250" value="1"> frames
+  </label>
+</section>
+
+<section id="resultBox" hidden>
+  <div class="resultHead">
+    <h2 id="summary"></h2>
+    <div class="actions">
+      <button id="btnCopy">Copiar taula</button>
+      <button id="btnCsv">Exportar CSV</button>
+    </div>
+  </div>
+  <div class="tableWrap"><table id="table"></table></div>
+</section>
+
+<script src="js/core.js"></script>
+<script src="js/tags.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
