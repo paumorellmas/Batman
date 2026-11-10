@@ -57,12 +57,16 @@ test('nom d\'arxiu de llibreria', () => {
     assert.deepStrictEqual(Core.parseFileName('una_musica.wav'), { discCode: '', track: '', title: 'una musica' });
 });
 
-test('files i CSV', () => {
+test('files, CSV i còpia per a la plantilla', () => {
     const s = seq([[clip('C:\\m\\HPE458_01_1_MY_BABY_GIRL.mp3', 10, 72)]]);
-    const rows = Core.buildRows(s, Core.buildCues(s, all, 0), () => ({ composer: 'A; B', title: 'MY "BABY" GIRL' }));
-    assert.strictEqual(rows[0].duration, '01:02');
-    assert.strictEqual(rows[0].discCode, 'HPE458');
+    const tags = { composer: 'A; B', title: 'MY "BABY" GIRL', artist: 'X', publisher: 'ORIGINAL PUB: EXTREME (PRS)' };
+    const rows = Core.buildRows(s, Core.buildCues(s, all, 0), () => tags, { language: 'Anglès', key: '07', type: 'Llibreria' });
+    assert.deepStrictEqual([rows[0].min, rows[0].sec], ['01', '02']);
+    assert.strictEqual(rows[0].publisher, 'EXTREME (PRS)');
     const csv = Core.toCSV(rows);
     assert.ok(csv.includes('"A; B"'));
     assert.ok(csv.includes('"MY ""BABY"" GIRL"'));
+    // Ordre exacte de les columnes B-K de la plantilla, sense capçalera
+    assert.strictEqual(Core.toTemplateTSV(rows),
+        ['01', '02', 'MY "BABY" GIRL', 'A; B', 'X', 'Anglès', '07', 'EXTREME (PRS)', 'Llibreria', 'HPE458'].join('\t'));
 });

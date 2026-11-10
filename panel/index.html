@@ -16,6 +16,11 @@
 <section id="tracksBox" hidden>
   <h2>Pistes amb música</h2>
   <div id="tracks"></div>
+  <div class="defaults">
+    <label>Idioma <select id="defLanguage"></select></label>
+    <label>Clau <select id="defKey"></select></label>
+    <label>Tipus <select id="defType"></select></label>
+  </div>
   <label class="gap">Separació màxima per comptar-ho com la mateixa música seguida
     <input id="gap" type="number" min="0" max="250" value="1"> frames
   </label>
@@ -25,7 +30,7 @@
   <div class="resultHead">
     <h2 id="summary"></h2>
     <div class="actions">
-      <button id="btnCopy">Copiar taula</button>
+      <button id="btnCopy" class="primary">Copiar per a la plantilla</button>
       <button id="btnCsv">Exportar CSV</button>
     </div>
   </div>

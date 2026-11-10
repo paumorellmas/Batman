@@ -13,7 +13,7 @@ button {
   padding: 5px 10px; font: inherit; cursor: pointer;
 }
 button:hover { background: #474747; }
-button:focus-visible, input:focus-visible { outline: 2px solid #4b9cf5; outline-offset: 1px; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #4b9cf5; outline-offset: 1px; }
 button.primary { background: #2d6fd2; border-color: #2d6fd2; color: #fff; }
 button.primary:hover { background: #3a7ee0; }
 .message { margin: 0; padding: 8px 10px; border-radius: 4px; background: #4a2f2f; color: #ffc9c9; }
@@ -24,6 +24,12 @@ button.primary:hover { background: #3a7ee0; }
 #tracks .count { margin-left: auto; color: #8c8c8c; white-space: nowrap; }
 #tracks .empty { color: #6f6f6f; }
 .tag { font-size: 10px; padding: 0 5px; border-radius: 8px; background: #5a4a22; color: #f1d58a; }
+.defaults { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; color: #a8a8a8; }
+.defaults label { display: flex; align-items: center; gap: 5px; }
+.defaults select {
+  max-width: 190px; background: #1a1a1a; color: #e6e6e6; border: 1px solid #555;
+  border-radius: 3px; padding: 2px 4px; font: inherit;
+}
 .gap { display: block; margin-top: 8px; color: #a8a8a8; }
 .gap input {
   width: 52px; background: #1a1a1a; color: #e6e6e6; border: 1px solid #555;

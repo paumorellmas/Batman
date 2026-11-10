@@ -15,7 +15,10 @@ L'instal·lador copia la carpeta `panel` a la carpeta d'extensions d'Adobe i act
 
 1. Amb la seqüència oberta a la línia de temps, prem **Llegir seqüència activa**.
 2. Marca les pistes d'àudio que contenen la música.
-3. **Copiar taula** per enganxar-la a un full de càlcul, o **Exportar CSV**.
+3. Tria **Idioma**, **Clau** i **Tipus** (són els valors de la plantilla, iguals per a totes les files, i es recorden d'una vegada per l'altra).
+4. Prem **Copiar per a la plantilla**, obre la plantilla "Music Cue Sheet" de 3Cat i enganxa a la cel·la **B13**. Les columnes ja van en l'ordre de la plantilla: Min., Seg., Títol, Autor/s, Intèrpret/s, Idioma, Clau, Editora, Tipus, Suport.
+
+**Exportar CSV** desa la taula sencera, amb els TC d'entrada i sortida, per si la vols guardar.
 
 Si canvies el muntatge, torna a prémer **Llegir seqüència activa**.
 
@@ -27,11 +30,11 @@ Si canvies el muntatge, torna a prémer **Llegir seqüència activa**.
 - El mateix arxiu duplicat en dues pistes alhora no compta doble.
 - Els clips desactivats no compten. Les pistes silenciades es marquen com a tals i les tries tu.
 - El camp "Separació màxima" decideix quants frames de forat s'accepten encara com a música seguida (1 per defecte).
-- La durada surt en mm:ss arrodonida al segon; els TC en hh:mm:ss, amb el TC d'inici de la seqüència.
+- La durada surt en minuts i segons, arrodonida al segon. Els TC d'entrada i sortida només es veuen al panell i al CSV, perquè la plantilla no els demana.
 
 ## D'on surten les dades
 
-Títol, autors, intèrpret, disc, editorial i ISRC es llegeixen de les metadades de l'arxiu (ID3 en MP3, i WAV/AIFF amb bloc ID3 o INFO). El codi de disc i la pista surten del nom de l'arxiu (`HPE458_01_1_TITOL.mp3` → `HPE458`, pista `01`). Si l'arxiu no porta metadades, el títol també surt del nom.
+Títol, autors, intèrpret i editora es llegeixen de les metadades de l'arxiu (ID3 en MP3, i WAV/AIFF amb bloc ID3 o INFO). El suport és el codi de disc, que surt del nom de l'arxiu (`HPE458_01_1_TITOL.mp3` → `HPE458`). Si l'arxiu no porta metadades, el títol també surt del nom.
 
 ## Desenvolupament
 

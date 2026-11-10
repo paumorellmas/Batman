@@ -49,6 +49,45 @@
         });
     }
 
+    // Idioma, clau i tipus: valors de la plantilla, iguals per a totes les files. Es recorden entre sessions.
+    var DEFAULTS = [
+        { id: 'defLanguage', field: 'language', options: Core.IDIOMES.map(function (v) { return [v, v]; }), initial: '' },
+        { id: 'defKey', field: 'key', options: Core.CLAUS.map(function (c) { return [c[0], c[0] + ' · ' + c[1]]; }), initial: '' },
+        { id: 'defType', field: 'type', options: Core.TIPUS.map(function (v) { return [v, v]; }), initial: 'Llibreria' }
+    ];
+
+    function store(key, value) {
+        try {
+            if (value === undefined) { return window.localStorage.getItem('ms.' + key); }
+            window.localStorage.setItem('ms.' + key, value);
+        } catch (e) {}
+        return null;
+    }
+
+    function setupDefaults() {
+        DEFAULTS.forEach(function (d) {
+            var sel = $(d.id);
+            [['', '—']].concat(d.options).forEach(function (o) {
+                var opt = document.createElement('option');
+                opt.value = o[0];
+                opt.textContent = o[1];
+                sel.appendChild(opt);
+            });
+            var saved = store(d.field);
+            sel.value = saved === null ? d.initial : saved;
+            sel.addEventListener('change', function () {
+                store(d.field, sel.value);
+                refresh();
+            });
+        });
+    }
+
+    function currentDefaults() {
+        var out = {};
+        DEFAULTS.forEach(function (d) { out[d.field] = $(d.id).value; });
+        return out;
+    }
+
     function tagsFor(path) {
         if (!(path in state.tags)) {
             state.tags[path] = nodeRequire && Tags ? Tags.readTags(path) : {};
@@ -102,7 +141,7 @@
         if (!seq) { return; }
         var gap = Math.max(0, parseInt($('gap').value, 10) || 0);
         var cues = Core.buildCues(seq, state.selected, gap);
-        state.rows = Core.buildRows(seq, cues, tagsFor);
+        state.rows = Core.buildRows(seq, cues, tagsFor, currentDefaults());
 
         var anySelected = Object.keys(state.selected).some(function (k) { return state.selected[k]; });
         $('summary').textContent = cues.length
@@ -134,14 +173,14 @@
                 var cell = tr.insertCell();
                 cell.textContent = r[c.id];
                 if (c.id === 'num') { cell.className = 'num'; }
-                if (c.id === 'tcIn' || c.id === 'tcOut' || c.id === 'duration') { cell.className = 'time'; }
+                if (c.id === 'tcIn' || c.id === 'tcOut' || c.id === 'min' || c.id === 'sec') { cell.className = 'time'; }
             });
         });
     }
 
     function copyTable() {
         var ta = document.createElement('textarea');
-        ta.value = Core.toTSV(state.rows);
+        ta.value = Core.toTemplateTSV(state.rows);
         ta.style.position = 'fixed';
         ta.style.opacity = '0';
         document.body.appendChild(ta);
@@ -149,7 +188,7 @@
         var ok = false;
         try { ok = document.execCommand('copy'); } catch (e) {}
         document.body.removeChild(ta);
-        showMessage(ok ? 'Taula copiada. Enganxa-la al full de càlcul.' : 'No s\'ha pogut copiar la taula.', ok);
+        showMessage(ok ? 'Copiat. Enganxa-ho a la cel·la B13 de la plantilla.' : 'No s\'ha pogut copiar la taula.', ok);
     }
 
     function exportCsv() {
@@ -183,6 +222,7 @@
         }
     }
 
+    setupDefaults();
     $('btnLoad').addEventListener('click', loadSequence);
     $('btnCopy').addEventListener('click', copyTable);
     $('btnCsv').addEventListener('click', exportCsv);

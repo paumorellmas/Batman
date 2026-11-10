@@ -86,41 +86,110 @@
         return { discCode: '', track: '', title: base.replace(/_+/g, ' ').trim() };
     }
 
+    var CLAUS = [
+        ["02", "Música Carta d'ajust"],
+        ["03", "Música caretes i sintonies"],
+        ["04", "Música sobre imatges, intermedis"],
+        ["05", "Música de fons, interpretada en directe"],
+        ["06", "Música de fons, només quan acompanya varietat"],
+        ["07", "Música de fons gravada"],
+        ["20", "Actuacions musicals: pop, rock, jazz, corals, vari"],
+        ["21", "Varietats: gags, mims, sketch..."],
+        ["23", "Acudits"],
+        ["30", "Actuacions música clàssica"],
+        ["55", "Publicitat"],
+        ["56", "Ràfegues (menys de 10 segons)"],
+        ["22E", "Fragment (fins a 20') obra dramàtica - Estranger"],
+        ["22N", "Fragment (fins a 20') obra dramàtica - Espanya."],
+        ["40E", "Obra de teatre - Estranger"],
+        ["40N", "Obra de teatre - Espanya"],
+        ["41E", "Obra de teatre mímica - Estranger"],
+        ["41N", "Obra de teatre mímica - Espanya"],
+        ["42E", "Poemes - Estranger"],
+        ["42N", "Poemes - Espanya"],
+        ["43E", "Comèdia Musical - Estranger"],
+        ["43N", "Comèdia Musical - Espanya"],
+        ["44E", "Sarsuela - Estranger"],
+        ["44N", "Sarsuela - Espanya"],
+        ["45E", "Opera - Estranger"],
+        ["45N", "Opera. - Espanya"],
+        ["46E", "Ballet. - Estranger"],
+        ["46N", "Ballet. - Espanya"],
+        ["47E", "Pel·lícula (llargmetratge) - Estranger"],
+        ["47N", "Pel·lícula (llargmetratge) - Espanya"],
+        ["47U", "Pel·lícula (llargmetratge) - USA"],
+        ["48E", "Curtmetrage. - Estranger"],
+        ["48N", "Curtmetrage. - Espanya"],
+        ["48U", "Curtmetrage. - USA"],
+        ["49E", "Documental - Estranger"],
+        ["49N", "Documental - Espanya"],
+        ["49U", "Documental - USA"],
+        ["50EC", "Series, telefilms etc. - Espanya"],
+        ["50UC", "Series, telefilms etc. inferiors a 15 minuts. - USA"],
+        ["50N", "Series, telefilms etc. inferiors a 15 minuts. - Estranger"],
+        ["50NC", "Series, telefilms etc. inferiors a 15 minuts. - Espanya"],
+        ["52E", "Series, telefilms etc. - Estranger"],
+        ["52U", "Series, telefilms etc. - Espanya"],
+        ["51E", "Dibuixos animats - Estranger"],
+        ["51N", "Dibuixos animats - Espanya"],
+        ["51U", "Dibuixos animats - USA"],
+        ["53E", "Videoclips - Estranger"],
+        ["53N", "Videoclips - Espanya"],
+        ["53U", "Videoclips - USA"],
+        ["54E", "Docudrama - Estranger"],
+        ["54N", "Docudrama - Espanya"],
+        ["54U", "Docudrama - USA"],
+        ["60E", "Obres multimèdia - Estranger"],
+        ["60N", "Obres multimèdia - Espanya"],
+        ["60U", "Obres multimèdia - USA"]
+    ];
+
+    var IDIOMES = ['Català', 'Aranès', 'Castellà', 'Anglès', 'Altres'];
+    var TIPUS = ['TVC Ed.', 'Llibreria', 'Comercial'];
+
+    // Columnes del panell. Les marcades amb `template` són, en aquest ordre, les columnes B-K
+    // de la plantilla "Music Cue Sheet" de 3Cat (les dades comencen a la cel·la B13).
     var COLUMNS = [
         { id: 'num', label: 'Núm.' },
         { id: 'tcIn', label: 'TC entrada' },
         { id: 'tcOut', label: 'TC sortida' },
-        { id: 'duration', label: 'Durada' },
-        { id: 'title', label: 'Títol' },
-        { id: 'composer', label: 'Autors' },
-        { id: 'artist', label: 'Intèrpret' },
-        { id: 'album', label: 'Disc' },
-        { id: 'discCode', label: 'Codi disc' },
-        { id: 'track', label: 'Pista' },
-        { id: 'publisher', label: 'Editorial' },
-        { id: 'isrc', label: 'ISRC' },
+        { id: 'min', label: 'Min.', template: true },
+        { id: 'sec', label: 'Seg.', template: true },
+        { id: 'title', label: 'Títol', template: true },
+        { id: 'composer', label: 'Autor/s', template: true },
+        { id: 'artist', label: 'Intèrpret/s', template: true },
+        { id: 'language', label: 'Idioma', template: true },
+        { id: 'key', label: 'Clau', template: true },
+        { id: 'publisher', label: 'Editora', template: true },
+        { id: 'type', label: 'Tipus', template: true },
+        { id: 'support', label: 'Suport', template: true },
         { id: 'file', label: 'Arxiu' }
     ];
+    var TEMPLATE_COLUMNS = COLUMNS.filter(function (c) { return c.template; });
 
     // Una fila del full per cada ús. tagsFor(path) retorna les metadades de l'arxiu (o {}).
-    function buildRows(seq, cues, tagsFor) {
+    // defaults: { language, key, type } triats al panell, iguals per a totes les files.
+    function buildRows(seq, cues, tagsFor, defaults) {
+        defaults = defaults || {};
         return cues.map(function (cue, i) {
             var file = baseName(cue.path) || cue.name;
             var fromName = parseFileName(file);
             var tags = (cue.path && tagsFor && tagsFor(cue.path)) || {};
+            var seconds = Math.round((cue.end - cue.start) / (seq.fps || 25));
             return {
                 num: String(i + 1),
                 tcIn: formatTC(cue.start, seq.fps, seq.zero),
                 tcOut: formatTC(cue.end, seq.fps, seq.zero),
-                duration: formatDuration(cue.end - cue.start, seq.fps),
+                min: pad(Math.floor(seconds / 60)),
+                sec: pad(seconds % 60),
                 title: tags.title || fromName.title,
                 composer: tags.composer || '',
                 artist: tags.artist || '',
-                album: tags.album || '',
-                discCode: fromName.discCode,
-                track: fromName.track || tags.track || '',
-                publisher: tags.publisher || '',
-                isrc: tags.isrc || '',
+                language: defaults.language || '',
+                key: defaults.key || '',
+                publisher: (tags.publisher || '').replace(/^ORIGINAL PUB(LISHER)?S?:\s*/i, ''),
+                type: defaults.type || '',
+                support: fromName.discCode,
                 file: file
             };
         });
@@ -132,21 +201,25 @@
         return formatDuration(f, fps);
     }
 
-    function toDelimited(rows, sep) {
+    function toDelimited(rows, sep, columns, noHeader) {
+        columns = columns || COLUMNS;
         function cell(v) {
             v = String(v == null ? '' : v);
             if (sep === '\t') { return v.replace(/[\t\r\n]+/g, ' '); }
             return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
         }
-        var lines = [COLUMNS.map(function (c) { return cell(c.label); }).join(sep)];
+        var lines = noHeader ? [] : [columns.map(function (c) { return cell(c.label); }).join(sep)];
         rows.forEach(function (r) {
-            lines.push(COLUMNS.map(function (c) { return cell(r[c.id]); }).join(sep));
+            lines.push(columns.map(function (c) { return cell(r[c.id]); }).join(sep));
         });
         return lines.join('\r\n');
     }
 
     return {
         COLUMNS: COLUMNS,
+        CLAUS: CLAUS,
+        IDIOMES: IDIOMES,
+        TIPUS: TIPUS,
         baseName: baseName,
         buildCues: buildCues,
         buildRows: buildRows,
@@ -155,6 +228,7 @@
         parseFileName: parseFileName,
         totalDuration: totalDuration,
         toCSV: function (rows) { return '﻿' + toDelimited(rows, ';') + '\r\n'; },
-        toTSV: function (rows) { return toDelimited(rows, '\t'); }
+        // Només les columnes de la plantilla i sense capçalera: per enganxar a la cel·la B13.
+        toTemplateTSV: function (rows) { return toDelimited(rows, '\t', TEMPLATE_COLUMNS, true); }
     };
 }));
