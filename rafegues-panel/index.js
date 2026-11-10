@@ -13,6 +13,9 @@ let presets = [];
 let settings = { vDest: "preset", aDest: "preset", moveAfter: false, outCorr: null };
 let capturingKeyFor = null;
 let renamingId = null;
+let openId = null;          // ràfega amb les opcions desplegades
+let showOthers = false;     // mostra també les ràfegues d'altres projectes
+let currentProject = null;  // { id, path, name } del projecte actiu
 let busy = false;
 const itemCache = new Map(); // id del projecte + path normalitzat -> ProjectItem
 
@@ -21,7 +24,6 @@ const $ = (id) => document.getElementById(id);
 const tt = (n) => ppro.TickTime.createWithTicks(String(Math.round(n)));
 const norm = (p) => (p || "").replace(/\\/g, "/").toLowerCase();
 const samePath = (a, b) => !!a && !!b && norm(a) === norm(b);
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 function status(msg, kind) {
@@ -47,6 +49,32 @@ function save() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch (e) { status("No s'han pogut desar els presets: " + e.message, "err"); }
 }
+
+// ------------------------------------------------- ràfegues globals / de projecte
+// Cada ràfega és de "Tots els projectes" (scope "global") o d'un projecte concret (scope "project").
+// El projecte s'identifica pel camí del fitxer .prproj; el guid només es fa servir si encara no
+// s'ha desat, perquè els projectes creats copiant una plantilla comparteixen guid.
+async function detectProject() {
+  let info = null;
+  try {
+    const project = await ppro.Project.getActiveProject();
+    if (project) {
+      let id = "";
+      try { id = project.guid.toString(); } catch (e) { /* sense guid */ }
+      info = { id, path: project.path || "", name: String(project.name || "").replace(/\.prproj$/i, "") };
+    }
+  } catch (e) { info = null; }
+  const changed = JSON.stringify(info) !== JSON.stringify(currentProject);
+  currentProject = info;
+  return changed;
+}
+const isGlobal = (p) => p.scope !== "project";
+function isMine(p) {
+  if (isGlobal(p) || !currentProject || !p.project) return false;
+  if (p.project.path && currentProject.path) return samePath(p.project.path, currentProject.path);
+  return !!p.project.id && p.project.id === currentProject.id;
+}
+const isActive = (p) => isGlobal(p) || isMine(p); // les que responen a les tecles
 
 async function getContext() {
   const project = await ppro.Project.getActiveProject();
@@ -219,6 +247,7 @@ async function applyPreset(p) {
   busy = true;
   try {
     const ctx = await getContext();
+    if (await detectProject()) render();
     const T0 = (await ctx.seq.getPlayerPosition()).ticksNumber;
     const vCount = await ctx.seq.getVideoTrackCount();
     const aCount = await ctx.seq.getAudioTrackCount();
@@ -281,11 +310,13 @@ async function applyPreset(p) {
 }
 
 // ------------------------------------------------ desar la selecció com a preset
-async function captureFromSelection() {
+async function captureFromSelection(scope) {
   if (busy) return;
   busy = true;
   try {
     const { seq, frame } = await getContext();
+    await detectProject();
+    if (scope === "project" && !currentProject) throw new Error("No hi ha cap projecte obert.");
     // Només es lligen sencers els clips seleccionats: en una seqüència llarga, llegir-los tots és lent.
     const selV = [], selA = [];
     await forEachTrack(seq, "video", async (track, i) => {
@@ -313,6 +344,8 @@ async function captureFromSelection() {
       id: uid(),
       name: (video || sound).name.replace(/\.[^.]+$/, ""),
       key: null,
+      scope: scope === "project" ? "project" : "global",
+      project: scope === "project" ? Object.assign({}, currentProject) : null,
       video: strip(video),
       audio: strip(sound),
       offset: video && sound ? sound.start - video.start : 0,
@@ -323,7 +356,8 @@ async function captureFromSelection() {
     save();
     renamingId = preset.id; // obri directament el camp per posar-li nom
     render();
-    let msg = "Ràfega desada. Posa-li un nom i assigna-li una tecla.";
+    let msg = (scope === "project" ? "Ràfega desada en aquest projecte." : "Ràfega desada per a tots els projectes.") +
+      " Posa-li un nom i assigna-li una tecla.";
     if ((video && video.speed !== 1) || (sound && sound.speed !== 1)) msg += " (Ull: la velocitat dels clips no es conserva.)";
     status(msg, video && sound ? "" : "warn");
   } catch (e) {
@@ -345,7 +379,7 @@ function comboFrom(e) {
   return parts.join("+");
 }
 function prettyKey(combo) {
-  if (!combo) return "—";
+  if (!combo) return "";
   return combo.replace("Numpad", "Num ").replace(/Key([A-Z])/, "$1").replace(/Digit(\d)/, "$1");
 }
 
@@ -356,8 +390,9 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { capturingKeyFor = null; render(); status(""); return; }
     const combo = comboFrom(e);
     if (!combo) return;
-    presets.forEach((p) => { if (p.key === combo) p.key = null; });
     const p = presets.find((x) => x.id === capturingKeyFor);
+    // Una tecla només pot ser d'una de les ràfegues que estan actives alhora
+    presets.forEach((x) => { if (x.key === combo && (isActive(x) || x === p)) x.key = null; });
     if (p) p.key = combo;
     capturingKeyFor = null;
     save(); render();
@@ -366,7 +401,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (tag === "input" || tag === "select" || tag === "textarea") return;
   const combo = comboFrom(e);
-  const p = combo && presets.find((x) => x.key === combo);
+  const p = combo && presets.find((x) => x.key === combo && isActive(x));
   if (p) { e.preventDefault(); applyPreset(p); }
 });
 
@@ -376,58 +411,137 @@ function describe(p) {
   if (p.video) parts.push("V: " + p.video.name);
   if (p.audio) parts.push("A: " + p.audio.name);
   if (p.video && p.audio && p.offset) {
-    const s = p.offset / TPS;
-    parts.push((s > 0 ? "+" : "") + s.toFixed(2) + " s");
+    const sec = p.offset / TPS;
+    parts.push((sec > 0 ? "+" : "") + sec.toFixed(2) + " s");
   }
   return parts.join(" · ");
 }
 
-function render() {
-  const list = $("list");
-  list.innerHTML = "";
-  $("empty").style.display = presets.length ? "none" : "block";
+// Els controls són <div>: a UXP els <button> porten l'estil de Premiere i no es deixen vestir bé.
+function el(cls, text, title) {
+  const d = document.createElement("div");
+  d.className = cls;
+  if (text !== undefined) d.textContent = text;
+  if (title) d.title = title;
+  return d;
+}
 
-  presets.forEach((p, idx) => {
-    const row = document.createElement("div");
-    row.className = "preset" + (capturingKeyFor === p.id ? " capturing" : "");
+// Mou una ràfega amunt o avall dins de la seua llista
+function moveInList(p, list, dir) {
+  const other = list[list.indexOf(p) + dir];
+  if (!other) return;
+  const i = presets.indexOf(p), j = presets.indexOf(other);
+  presets[i] = other; presets[j] = p;
+  save(); render();
+}
 
-    if (renamingId === p.id) {
-      row.innerHTML = '<input type="text" value="' + esc(p.name) + '"><button class="tool ok">OK</button>';
-      const input = row.querySelector("input");
-      const commit = () => { p.name = input.value.trim() || p.name; renamingId = null; save(); render(); };
-      input.addEventListener("keydown", (e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { renamingId = null; render(); } });
-      row.querySelector(".ok").addEventListener("click", commit);
-      list.appendChild(row);
-      setTimeout(() => { try { input.focus(); input.select(); } catch (e) { /* res */ } }, 50);
-      return;
-    }
+function setScope(p, scope) {
+  if (scope === "project" && !currentProject) { status("No hi ha cap projecte obert.", "err"); return; }
+  p.scope = scope;
+  p.project = scope === "project" ? Object.assign({}, currentProject) : null;
+  // si ara coincideix la tecla amb una altra ràfega activa, la perd la que es mou
+  if (p.key && presets.some((x) => x !== p && x.key === p.key && isActive(x))) p.key = null;
+  openId = null;
+  save(); render();
+  status(scope === "project" ? "«" + p.name + "» ara és només d'aquest projecte." : "«" + p.name + "» ara és de tots els projectes.");
+}
 
-    const keyLabel = capturingKeyFor === p.id ? "Prem…" : prettyKey(p.key);
-    row.innerHTML =
-      '<button class="go" title="' + esc(describe(p)) + '">' +
-        '<div class="name">' + esc(p.name) + '</div>' +
-        '<div class="meta">' + esc(describe(p)) + '</div>' +
-      '</button>' +
-      '<button class="key" title="Assigna una tecla">' + esc(keyLabel) + '</button>' +
-      '<button class="tool up" title="Puja">▲</button>' +
-      '<button class="tool ren" title="Canvia el nom">✎</button>' +
-      '<button class="tool del" title="Esborra">✕</button>';
+function renderRow(p, list, container) {
+  const row = el("preset" + (capturingKeyFor === p.id ? " capturing" : "") + (openId === p.id ? " open" : ""));
+  const main = el("main");
+  row.appendChild(main);
 
-    row.querySelector(".go").addEventListener("click", () => applyPreset(p));
-    row.querySelector(".key").addEventListener("click", () => {
-      capturingKeyFor = p.id; render();
-      status("Prem la tecla o combinació per a «" + p.name + "» (Esc cancel·la).", "warn");
+  if (renamingId === p.id) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = p.name;
+    const ok = el("chip accent", "OK");
+    const commit = () => { p.name = input.value.trim() || p.name; renamingId = null; save(); render(); };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") commit();
+      if (e.key === "Escape") { renamingId = null; render(); }
     });
-    row.querySelector(".up").addEventListener("click", () => {
-      if (idx > 0) { presets.splice(idx - 1, 0, presets.splice(idx, 1)[0]); save(); render(); }
-    });
-    row.querySelector(".ren").addEventListener("click", () => { renamingId = p.id; render(); });
-    row.querySelector(".del").addEventListener("click", () => {
-      if (row.dataset.confirm) { presets = presets.filter((x) => x.id !== p.id); save(); render(); status("Ràfega esborrada."); }
-      else { row.dataset.confirm = "1"; row.querySelector(".del").textContent = "Segur?"; }
-    });
-    list.appendChild(row);
+    ok.addEventListener("click", commit);
+    main.appendChild(input);
+    main.appendChild(ok);
+    container.appendChild(row);
+    setTimeout(() => { try { input.focus(); input.select(); } catch (e) { /* res */ } }, 50);
+    return;
+  }
+
+  let meta = describe(p);
+  if (!isActive(p)) meta = "Projecte: " + ((p.project && p.project.name) || "?") + " · " + meta;
+  const go = el("go", undefined, "Col·loca la ràfega al cursor");
+  go.appendChild(el("name", p.name));
+  go.appendChild(el("meta", meta));
+  go.addEventListener("click", () => applyPreset(p));
+  main.appendChild(go);
+
+  const capturing = capturingKeyFor === p.id;
+  const key = el("key" + (p.key || capturing ? "" : " none"), capturing ? "Prem…" : (prettyKey(p.key) || "tecla"),
+    "Assigna una tecla");
+  key.addEventListener("click", () => {
+    capturingKeyFor = p.id; render();
+    status("Prem la tecla o combinació per a «" + p.name + "» (Esc cancel·la).", "warn");
   });
+  main.appendChild(key);
+
+  const more = el("more", "···", "Opcions");
+  more.addEventListener("click", () => { openId = openId === p.id ? null : p.id; render(); });
+  main.appendChild(more);
+
+  if (openId === p.id) {
+    const tools = el("tools");
+    const add = (label, title, fn, cls) => {
+      const b = el("chip" + (cls ? " " + cls : ""), label, title);
+      b.addEventListener("click", fn);
+      tools.appendChild(b);
+      return b;
+    };
+    add("Canvia el nom", "", () => { renamingId = p.id; render(); });
+    add("▲", "Puja", () => moveInList(p, list, -1));
+    add("▼", "Baixa", () => moveInList(p, list, 1));
+    if (isGlobal(p)) add("Només aquest projecte", "Passa-la a les ràfegues d'aquest projecte", () => setScope(p, "project"));
+    else {
+      add("Tots els projectes", "Passa-la a les ràfegues de tots els projectes", () => setScope(p, "global"));
+      if (!isMine(p)) add("Aquest projecte", "Porta-la al projecte actual", () => setScope(p, "project"));
+    }
+    const del = add("Esborra", "", () => {
+      if (del.dataset.confirm) {
+        presets = presets.filter((x) => x.id !== p.id);
+        openId = null; save(); render(); status("Ràfega esborrada.");
+      } else { del.dataset.confirm = "1"; del.textContent = "Segur?"; }
+    }, "danger");
+    row.appendChild(tools);
+  }
+  container.appendChild(row);
+}
+
+function render() {
+  const globals = presets.filter(isGlobal);
+  const mine = presets.filter(isMine);
+  const others = presets.filter((p) => !isActive(p));
+
+  const fill = (id, list) => {
+    const box = $(id);
+    box.innerHTML = "";
+    list.forEach((p) => renderRow(p, list, box));
+  };
+  fill("listGlobal", globals);
+  fill("listProject", mine);
+  fill("listOthers", showOthers ? others : []);
+
+  $("emptyGlobal").style.display = globals.length ? "none" : "block";
+  $("emptyProject").style.display = mine.length ? "none" : "block";
+  $("emptyProject").textContent = currentProject
+    ? "Cap ràfega només d'aquest projecte."
+    : "Obri un projecte per desar-hi ràfegues.";
+  $("projectName").textContent = currentProject ? currentProject.name : "";
+
+  const o = $("others");
+  o.style.display = others.length ? "block" : "none";
+  o.textContent = (showOthers ? "Amaga" : "Mostra") +
+    (others.length === 1 ? " la ràfega d'un altre projecte" : " les " + others.length + " ràfegues d'altres projectes");
 }
 
 function fillTrackSelects(vc, ac) {
@@ -451,14 +565,21 @@ async function refreshTracks() {
   fillTrackSelects(vc, ac);
 }
 
+// Torna a mirar quin projecte i quina seqüència hi ha actius
+async function sync() {
+  if (await detectProject()) render();
+  await refreshTracks();
+}
+
 // ------------------------------------------------------- exportar / importar
 async function exportPresets() {
   try {
     const fs = uxp.storage.localFileSystem;
     const file = await fs.getFileForSaving("rafegues.json", { types: ["json"] });
     if (!file) return;
-    await file.write(JSON.stringify(presets, null, 2), { format: uxp.storage.formats.utf8 });
-    status("Exportades " + presets.length + " ràfegues.");
+    const list = presets.filter(isActive); // les de tots els projectes i les d'aquest
+    await file.write(JSON.stringify(list, null, 2), { format: uxp.storage.formats.utf8 });
+    status("Exportades " + list.length + " ràfegues.");
   } catch (e) { status("Error exportant: " + e.message, "err"); }
 }
 async function importPresets() {
@@ -468,11 +589,15 @@ async function importPresets() {
     if (!file) return;
     const data = JSON.parse(await file.read({ format: uxp.storage.formats.utf8 }));
     if (!Array.isArray(data)) throw new Error("El fitxer no conté ràfegues.");
+    await detectProject();
     let n = 0;
     data.forEach((p) => {
       if (!p || (!p.video && !p.audio)) return;
       p.id = uid();
-      if (p.key && presets.some((x) => x.key === p.key)) p.key = null;
+      // les que eren d'un projecte passen al projecte actual
+      if (p.scope === "project" && currentProject) p.project = Object.assign({}, currentProject);
+      else { p.scope = "global"; p.project = null; }
+      if (p.key && presets.some((x) => x.key === p.key && isActive(x))) p.key = null;
       presets.push(p); n++;
     });
     save(); render();
@@ -487,18 +612,27 @@ function init() {
   $("moveAfter").addEventListener("change", (e) => { settings.moveAfter = e.target.checked; save(); });
   $("vDest").addEventListener("change", (e) => { settings.vDest = e.target.value; save(); });
   $("aDest").addEventListener("change", (e) => { settings.aDest = e.target.value; save(); });
-  $("refresh").addEventListener("click", refreshTracks);
-  $("capture").addEventListener("click", captureFromSelection);
+  $("refresh").addEventListener("click", sync);
+  $("captureGlobal").addEventListener("click", () => captureFromSelection("global"));
+  $("captureProject").addEventListener("click", () => captureFromSelection("project"));
+  $("others").addEventListener("click", () => { showOthers = !showOthers; render(); });
   $("export").addEventListener("click", exportPresets);
   $("import").addEventListener("click", importPresets);
   render();
-  refreshTracks();
+  sync();
+
+  // Quan es canvia de projecte o de seqüència, el panell s'actualitza sol
+  try {
+    const E = ppro.Constants.ProjectEvent, S = ppro.Constants.SequenceEvent;
+    [E.OPENED, E.CLOSED, E.ACTIVATED, S.ACTIVATED].forEach((name) =>
+      ppro.EventManager.addGlobalEventListener(name, () => { sync(); }));
+  } catch (e) { /* sense esdeveniments: s'actualitza en mostrar el panell o amb ⟳ */ }
 }
 
 uxp.entrypoints.setup({
   panels: {
     rafeguesPanel: {
-      show() { refreshTracks(); },
+      show() { sync(); },
     },
   },
 });

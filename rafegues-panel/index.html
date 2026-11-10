@@ -1,40 +1,51 @@
 <!DOCTYPE html>
-<html>
+<html lang="ca">
 <head>
   <meta charset="utf-8">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app">
-    <div class="row dest">
-      <label>Vídeo</label>
-      <select id="vDest"></select>
-      <label>Àudio</label>
-      <select id="aDest"></select>
-      <button id="refresh" class="icon" title="Actualitza les pistes de la seqüència">⟳</button>
+    <div class="bar">
+      <span class="barLabel">Destí</span>
+      <select id="vDest" title="Pista de vídeo de destí"></select>
+      <select id="aDest" title="Pista d'àudio de destí"></select>
+      <div id="refresh" class="iconBtn" title="Actualitza el projecte i les pistes">⟳</div>
     </div>
 
-    <div id="list"></div>
-    <div id="empty" class="hint">
-      Encara no tens cap ràfega.<br>
-      Munta-la una vegada a la timeline (vídeo + so), selecciona els dos clips i prem
-      <b>Desa la selecció</b>.
+    <div class="section">
+      <div class="sectionHead">
+        <span class="sectionTitle">TOTS ELS PROJECTES</span>
+        <div id="captureGlobal" class="add" title="Desa els clips seleccionats com a ràfega per a tots els projectes">+ Desa la selecció</div>
+      </div>
+      <div id="listGlobal"></div>
+      <div id="emptyGlobal" class="empty">
+        Munta la ràfega a la timeline (vídeo + so), selecciona els dos clips i prem «+ Desa la selecció».
+      </div>
     </div>
 
-    <button id="capture" class="primary">+ Desa la selecció com a ràfega</button>
+    <div class="section">
+      <div class="sectionHead">
+        <span class="sectionTitle">AQUEST PROJECTE</span>
+        <span id="projectName" class="projectName"></span>
+        <div id="captureProject" class="add" title="Desa els clips seleccionats com a ràfega només d'aquest projecte">+ Desa la selecció</div>
+      </div>
+      <div id="listProject"></div>
+      <div id="emptyProject" class="empty"></div>
+      <div id="others" class="link"></div>
+      <div id="listOthers"></div>
+    </div>
 
-    <div class="row opts">
+    <div class="footer">
       <label class="check"><input type="checkbox" id="moveAfter"> Mou el cursor al final</label>
-    </div>
-    <div class="row opts">
-      <button id="export" class="small">Exporta</button>
-      <button id="import" class="small">Importa</button>
+      <div class="footerBtns">
+        <div id="export" class="chip">Exporta</div>
+        <div id="import" class="chip">Importa</div>
+      </div>
     </div>
 
     <div id="status" class="status"></div>
-    <div class="hint small-hint">
-      Les tecles funcionen quan el panell té el focus: fes clic al fons del panell (no a un camp de text).
-    </div>
+    <div class="note">Les tecles funcionen quan el panell té el focus: fes clic al fons del panell.</div>
   </div>
   <script src="index.js"></script>
 </body>

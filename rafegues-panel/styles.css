@@ -1,53 +1,82 @@
+/* Només CSS senzill (flex, marges, vores): UXP no entén grid ni gap a totes les versions. */
 body {
-  background-color: #232323;
-  color: #d6d6d6;
+  background-color: #1f1f1f;
+  color: #d0d0d0;
   font-family: sans-serif;
   font-size: 12px;
   margin: 0;
-  padding: 8px;
+  padding: 10px;
 }
 #app { display: flex; flex-direction: column; }
-.row { display: flex; flex-direction: row; align-items: center; margin-bottom: 6px; }
-.dest label { margin-right: 4px; color: #9a9a9a; }
-.dest select { margin-right: 8px; width: 92px; }
-button {
-  background-color: #3a3a3a;
-  color: #e6e6e6;
-  border: 1px solid #4a4a4a;
-  border-radius: 3px;
-  padding: 4px 8px;
-  font-size: 12px;
-}
-button:hover { background-color: #474747; }
-button.primary { background-color: #2d6fd6; border-color: #2d6fd6; color: #fff; padding: 7px 8px; margin: 6px 0; }
-button.primary:hover { background-color: #3a7ce3; }
-button.icon { padding: 3px 7px; }
-button.small { padding: 3px 8px; margin-right: 6px; }
 
-#list { display: flex; flex-direction: column; }
-.preset {
-  display: flex; flex-direction: row; align-items: center;
-  background-color: #2c2c2c; border: 1px solid #383838; border-radius: 4px;
-  padding: 4px; margin-bottom: 4px;
+/* Barra de destí */
+.bar { display: flex; flex-direction: row; align-items: center; margin-bottom: 14px; }
+.barLabel { color: #8a8a8a; margin-right: 8px; }
+.bar select { flex-grow: 1; flex-basis: 0; min-width: 0; margin-right: 6px; }
+.iconBtn {
+  width: 24px; height: 24px; line-height: 24px; text-align: center;
+  border-radius: 4px; color: #a8a8a8; cursor: pointer; font-size: 14px;
 }
+.iconBtn:hover { background-color: #333; color: #fff; }
+
+/* Seccions */
+.section { margin-bottom: 16px; }
+.sectionHead { display: flex; flex-direction: row; align-items: center; margin-bottom: 6px; }
+.sectionTitle { color: #8a8a8a; font-size: 10px; font-weight: bold; letter-spacing: 0.6px; white-space: nowrap; }
+.projectName {
+  flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: 6px; color: #c8c8c8; font-size: 10px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.add {
+  margin-left: auto; padding: 3px 8px; border-radius: 10px; white-space: nowrap;
+  color: #6eaaf7; font-size: 11px; cursor: pointer;
+}
+.add:hover { background-color: #25364d; color: #a9cdfb; }
+.empty { color: #777; font-size: 11px; line-height: 15px; padding: 8px 10px; border: 1px dashed #3a3a3a; border-radius: 6px; }
+.link { color: #8a8a8a; font-size: 11px; padding: 6px 2px; cursor: pointer; }
+.link:hover { color: #d0d0d0; }
+
+/* Una ràfega */
+.preset { background-color: #2b2b2b; border: 1px solid #2b2b2b; border-radius: 6px; margin-bottom: 4px; }
+.preset:hover { background-color: #303030; border-color: #3d3d3d; }
+.preset.open { border-color: #4a4a4a; }
 .preset.capturing { border-color: #e0a030; }
-.preset .go {
-  flex-grow: 1; text-align: left; background-color: #333; border-color: #444;
-  padding: 7px 8px; overflow: hidden;
+.main { display: flex; flex-direction: row; align-items: center; padding: 2px 4px 2px 0; }
+.go { flex-grow: 1; flex-basis: 0; min-width: 0; padding: 6px 8px 6px 10px; cursor: pointer; }
+.name { color: #f2f2f2; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { color: #858585; font-size: 10px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.go:hover .name { color: #8fc0ff; }
+.key {
+  padding: 3px 7px; margin-left: 4px; border-radius: 4px; white-space: nowrap; cursor: pointer;
+  background-color: #1a1a1a; border: 1px solid #4a4a4a; color: #e8b34a; font-size: 11px; font-weight: bold;
 }
-.preset .go .name { font-weight: bold; color: #f0f0f0; }
-.preset .go .meta { color: #8c8c8c; font-size: 10px; }
-.preset .key {
-  min-width: 34px; margin-left: 4px; text-align: center;
-  background-color: #1d1d1d; border: 1px solid #555; color: #e0a030;
-  border-radius: 3px; padding: 3px 4px; font-size: 11px;
+.key.none { background-color: transparent; border: 1px dashed #4a4a4a; color: #777; font-weight: normal; }
+.key:hover { border-color: #e0a030; color: #f3c56a; }
+.more {
+  width: 22px; height: 22px; line-height: 20px; margin-left: 2px; text-align: center;
+  border-radius: 4px; color: #8a8a8a; cursor: pointer;
 }
-.preset .tool { margin-left: 4px; padding: 3px 6px; }
-.preset input { flex-grow: 1; }
+.more:hover, .preset.open .more { background-color: #3d3d3d; color: #fff; }
+.main input { flex-grow: 1; flex-basis: 0; min-width: 0; margin: 4px 6px 4px 8px; }
 
-.status { margin-top: 6px; min-height: 16px; color: #9ad19a; }
+/* Opcions d'una ràfega */
+.tools { display: flex; flex-direction: row; flex-wrap: wrap; padding: 2px 6px 6px 8px; border-top: 1px solid #383838; }
+.chip {
+  margin: 5px 5px 0 0; padding: 3px 8px; border-radius: 4px; white-space: nowrap; cursor: pointer;
+  background-color: #3a3a3a; color: #dcdcdc; font-size: 11px;
+}
+.chip:hover { background-color: #4a4a4a; color: #fff; }
+.chip.accent { background-color: #2d6fd6; color: #fff; margin: 0 4px 0 0; }
+.chip.accent:hover { background-color: #3a7ce3; }
+.chip.danger { color: #ff9a90; }
+.chip.danger:hover { background-color: #5a2d2a; color: #ffd0cb; }
+
+/* Peu */
+.footer { display: flex; flex-direction: row; align-items: center; padding-top: 10px; border-top: 1px solid #333; }
+.check { display: flex; flex-direction: row; align-items: center; color: #b8b8b8; }
+.footerBtns { display: flex; flex-direction: row; margin-left: auto; }
+.footer .chip { margin: 0 0 0 5px; }
+.status { margin-top: 8px; min-height: 16px; color: #8fd08f; line-height: 16px; }
 .status.err { color: #ff8a80; }
-.status.warn { color: #e0a030; }
-.hint { color: #8c8c8c; padding: 10px 4px; line-height: 16px; }
-.small-hint { font-size: 10px; padding: 4px; }
-.check { display: flex; align-items: center; color: #bdbdbd; }
+.status.warn { color: #e8b34a; }
+.note { color: #6f6f6f; font-size: 10px; line-height: 14px; margin-top: 4px; }

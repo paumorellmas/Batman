@@ -37,7 +37,7 @@ function makeWorld(opts = {}) {
 
     const log = [];
     const project = {
-        guid: { toString: () => 'proj-1' },
+        guid: { toString: () => 'proj-1' }, path: opts.projectPath || 'D:/proj/setmana46.prproj', name: 'setmana46.prproj',
         getActiveSequence: async () => seqApi,
         getRootItem: async () => ({ isFolder: true, getItems: async () => Object.values(media).filter((m) => m.imported) }),
         importFiles: async (paths) => { paths.forEach((p) => { if (media[p]) media[p].imported = true; }); return true; },
@@ -98,7 +98,7 @@ function makeWorld(opts = {}) {
         setTimeout, console
     };
     vm.createContext(ctx);
-    vm.runInContext(SRC + '\nthis.api = { applyPreset, captureFromSelection, get presets() { return presets; }, get settings() { return settings; } };', ctx);
+    vm.runInContext(SRC + '\nthis.api = { applyPreset, captureFromSelection, detectProject, isActive, setScope, get presets() { return presets; }, get settings() { return settings; } };', ctx);
     const clips = (kind) => seq[kind].map((t) => t.items.map((i) => [path.basename(i.m.path), i.start / F, i.end / F]));
     return { api: ctx.api, seq, media, addMedia, addItem, clips, log, status: () => els.status.textContent, els, store };
 }
@@ -185,4 +185,34 @@ test('pista triada que no existeix a la seqüència: es fa com al preset', async
     await w.api.applyPreset({ name: 'x', video: { path: cam.path, name: 'r', inP: 0, outP: 50 * F, track: 1 }, audio: null, offset: 0 });
     assert.match(w.status(), /^✓.*V2/);
     assert.strictEqual(w.clips('video')[1].length, 1);
+});
+
+test('ràfegues de tots els projectes i ràfegues només d\'un projecte', async () => {
+    const mk = (name, extra) => Object.assign({ id: name, name, key: null, video: { path: 'D:/r/a.mxf', name: 'a', inP: 0, outP: F, track: 0 }, audio: null, offset: 0 }, extra);
+    const stored = [
+        mk('antiga'), // desada amb la versió anterior: sense àmbit, val per a tots els projectes
+        mk('global', { scope: 'global' }),
+        mk('meua', { scope: 'project', project: { id: 'x', path: 'd:\\PROJ\\Setmana46.prproj', name: 's46' } }),
+        mk('altra', { scope: 'project', project: { id: 'proj-1', path: 'D:/proj/setmana45.prproj', name: 's45' } })
+    ];
+    const w = makeWorld({ storage: { 'rafegues.presets.v1': JSON.stringify(stored) } });
+    await w.api.detectProject();
+    // el projecte es reconeix pel camí del fitxer, no pel guid (les còpies d'una plantilla el comparteixen)
+    assert.strictEqual(w.api.presets.map((p) => w.api.isActive(p)).join(), "true,true,true,false");
+
+    // desar la selecció en aquest projecte
+    const cam = w.addMedia('D:/r/rafega.mxf', true, false);
+    cam.imported = true;
+    w.addItem('video', 0, cam, 0, 0, 50 * F, true);
+    await w.api.captureFromSelection('project');
+    const nova = w.api.presets[4];
+    assert.strictEqual(nova.scope, 'project');
+    assert.strictEqual(nova.project.path, 'D:/proj/setmana46.prproj');
+    assert.strictEqual(w.api.isActive(nova), true);
+
+    // passar-la a tots els projectes i tornar-la a aquest
+    w.api.setScope(nova, 'global');
+    assert.deepStrictEqual([nova.scope, nova.project], ['global', null]);
+    w.api.setScope(w.api.presets[3], 'project');
+    assert.strictEqual(w.api.isActive(w.api.presets[3]), true);
 });
