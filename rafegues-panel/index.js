@@ -10,11 +10,11 @@ const STORE_KEY = "rafegues.presets.v1";
 const SETTINGS_KEY = "rafegues.settings.v1";
 
 let presets = [];
-let settings = { vDest: "preset", aDest: "preset", moveAfter: false, outCorrection: 0 };
+let settings = { vDest: "preset", aDest: "preset", moveAfter: false, outCorr: null };
 let capturingKeyFor = null;
 let renamingId = null;
 let busy = false;
-const itemCache = new Map(); // path normalitzat -> ProjectItem
+const itemCache = new Map(); // id del projecte + path normalitzat -> ProjectItem
 
 // ---------------------------------------------------------------- utilitats
 const $ = (id) => document.getElementById(id);
@@ -33,6 +33,13 @@ function status(msg, kind) {
 function load() {
   try { presets = JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch (e) { presets = []; }
   try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch (e) { /* res */ }
+  // Correcció d'un fotograma en l'out: separada per a vídeo i àudio. Les versions anteriors
+  // del panell en desaven una de sola (outCorrection), que es manté com a punt de partida.
+  if (!settings.outCorr) {
+    const old = Number(settings.outCorrection) || 0;
+    settings.outCorr = { video: old, audio: old };
+  }
+  delete settings.outCorrection;
 }
 function save() {
   try {
@@ -109,10 +116,11 @@ async function findPlaced(seq, kind, path, at, frame) {
   return found;
 }
 
-// Primera pista (començant per dalt) buida entre from i to
-async function findFreeTrack(seq, kind, from, to) {
+// Pista més alta que està buida entre from i to (sense comptar la pista `exclude`)
+async function findFreeTrack(seq, kind, from, to, exclude) {
   const free = [];
   await forEachTrack(seq, kind, async (track, i) => {
+    if (i === exclude) return;
     for (const it of await trackItems(track)) {
       const s = (await it.getStartTime()).ticksNumber;
       const e = (await it.getEndTime()).ticksNumber;
@@ -152,7 +160,9 @@ async function walkFind(folder, path) {
 }
 
 async function findOrImport(project, path) {
-  const key = norm(path);
+  let projectId = "";
+  try { projectId = project.guid.toString(); } catch (e) { /* sense guid: clau només pel path */ }
+  const key = projectId + "|" + norm(path);
   const cached = itemCache.get(key);
   if (cached && samePath(await pathOf(cached), path)) return cached;
 
@@ -171,21 +181,31 @@ async function findOrImport(project, path) {
 // --------------------------------------------- col·locar un tram d'un clip
 async function placeRange(ctx, kind, pi, inP, outP, at, vIdx, aIdx) {
   const clip = ppro.ClipProjectItem.cast(pi);
-  const out = outP - (settings.outCorrection || 0);
+  const corr = settings.outCorr[kind] || 0;
   // Tres transaccions separades: si van juntes Premiere pot fer l'overwrite abans del in/out
-  tx(ctx.project, "Ràfega: in/out", (ca) => ca.addAction(clip.createSetInOutPointsAction(tt(inP), tt(out))));
-  tx(ctx.project, "Ràfega: sobreescriu", (ca) => ca.addAction(ctx.editor.createOverwriteItemAction(pi, tt(at), vIdx, aIdx)));
-  tx(ctx.project, "Ràfega: neteja in/out", (ca) => ca.addAction(clip.createClearInOutPointsAction()));
+  tx(ctx.project, "Ràfega: in/out", (ca) => ca.addAction(clip.createSetInOutPointsAction(tt(inP), tt(outP - corr))));
+  try {
+    tx(ctx.project, "Ràfega: sobreescriu", (ca) => ca.addAction(ctx.editor.createOverwriteItemAction(pi, tt(at), vIdx, aIdx)));
+  } finally {
+    // Passe el que passe, el clip original no s'ha de quedar amb l'in/out de la ràfega
+    try {
+      tx(ctx.project, "Ràfega: neteja in/out", (ca) => ca.addAction(clip.createClearInOutPointsAction()));
+    } catch (e) { /* res: l'error important és el de l'overwrite */ }
+  }
 
   // Calibratge: comprova que la durada col·locada és l'esperada (out inclusiu vs exclusiu)
   const path = await pathOf(pi);
   const placed = await findPlaced(ctx.seq, kind, path, at, ctx.frame);
   if (placed.length) {
-    const it = placed[0].item;
+    // Si ja hi havia un altre clip del mateix fitxer al mateix punt, mira el de la pista de destí
+    const target = kind === "video" ? vIdx : aIdx;
+    const it = (placed.find((f) => f.track === target) || placed[0]).item;
     const dur = (await it.getEndTime()).ticksNumber - (await it.getStartTime()).ticksNumber;
     const delta = dur - (outP - inP);
     if (Math.abs(delta) >= ctx.frame / 2 && Math.abs(delta) <= ctx.frame * 1.5) {
-      settings.outCorrection = (settings.outCorrection || 0) + delta;
+      // Mai més d'un fotograma i mig: així una mesura estranya no pot anar escurçant les ràfegues
+      const max = ctx.frame * 1.5;
+      settings.outCorr[kind] = Math.max(-max, Math.min(max, corr + delta));
       save();
     }
     return at + dur;
@@ -203,8 +223,13 @@ async function applyPreset(p) {
     const vCount = await ctx.seq.getVideoTrackCount();
     const aCount = await ctx.seq.getAudioTrackCount();
 
-    const vIdx = settings.vDest === "preset" ? (p.video ? p.video.track : 0) : Number(settings.vDest);
-    const aIdx = settings.aDest === "preset" ? (p.audio ? p.audio.track : 0) : Number(settings.aDest);
+    // Si la pista triada no existeix en aquesta seqüència, es fa com al preset
+    // (és el que passa a mostrar el desplegable).
+    fillTrackSelects(vCount, aCount);
+    const dest = (value, count, fromPreset) =>
+      value !== "preset" && Number(value) < count ? Number(value) : fromPreset;
+    const vIdx = dest(settings.vDest, vCount, p.video ? p.video.track : 0);
+    const aIdx = dest(settings.aDest, aCount, p.audio ? p.audio.track : 0);
     if (p.video && vIdx >= vCount) throw new Error("La seqüència no té la pista V" + (vIdx + 1) + ".");
     if (p.audio && aIdx >= aCount) throw new Error("La seqüència no té la pista A" + (aIdx + 1) + ".");
 
@@ -212,17 +237,28 @@ async function applyPreset(p) {
     const aStart = T0 + (p.video ? p.offset : 0);
     if (aStart < 0) throw new Error("El so comença abans del cursor i no hi ha prou espai al principi de la seqüència.");
 
+    // Pistes auxiliars per a la part que després es lleva (àudio de càmera, imatge del fitxer de so).
+    // Es decideixen abans de tocar res, per no deixar la ràfega a mitges.
+    let tmpA = aIdx;
+    if (p.video && p.videoHasAudio) {
+      const free = await findFreeTrack(ctx.seq, "audio", vStart, vStart + (p.video.outP - p.video.inP), aIdx);
+      if (free !== null) tmpA = free;
+    }
+    let tmpV = vIdx;
+    if (p.audio && p.soundHasVideo) {
+      const free = await findFreeTrack(ctx.seq, "video", aStart, aStart + (p.audio.outP - p.audio.inP), p.video ? vIdx : undefined);
+      if (free === null) {
+        throw new Error("El fitxer de so té imatge i no hi ha cap pista de vídeo lliure en aquest tram. " +
+          "Afig una pista de vídeo buida i torna-ho a provar.");
+      }
+      tmpV = free;
+    }
+
     let endMax = T0;
-    let warn = "";
 
     // 1) Vídeo de la ràfega (primer, perquè l'àudio de càmera no xafe el so)
     if (p.video) {
       const pi = await findOrImport(ctx.project, p.video.path);
-      let tmpA = aIdx;
-      if (p.videoHasAudio) {
-        const free = await findFreeTrack(ctx.seq, "audio", vStart, vStart + (p.video.outP - p.video.inP));
-        if (free !== null) tmpA = free;
-      }
       endMax = Math.max(endMax, await placeRange(ctx, "video", pi, p.video.inP, p.video.outP, vStart, vIdx, tmpA));
       // l'àudio propi del clip de vídeo (càmera) no el volem si el preset porta so
       if (p.audio) await removePlaced(ctx, "audio", p.video.path, vStart);
@@ -231,18 +267,12 @@ async function applyPreset(p) {
     // 2) So de la ràfega
     if (p.audio) {
       const pi = await findOrImport(ctx.project, p.audio.path);
-      let tmpV = vIdx;
-      if (p.soundHasVideo) {
-        const free = await findFreeTrack(ctx.seq, "video", aStart, aStart + (p.audio.outP - p.audio.inP));
-        if (free !== null) tmpV = free;
-        else warn = "Avís: el fitxer de so té imatge i no hi havia cap pista de vídeo lliure.";
-      }
       endMax = Math.max(endMax, await placeRange(ctx, "audio", pi, p.audio.inP, p.audio.outP, aStart, tmpV, aIdx));
       if (p.soundHasVideo) await removePlaced(ctx, "video", p.audio.path, aStart);
     }
 
     if (settings.moveAfter) await ctx.seq.setPlayerPosition(tt(endMax));
-    status(warn || ("✓ " + p.name + "  (V" + (vIdx + 1) + " / A" + (aIdx + 1) + ")"), warn ? "warn" : "");
+    status("✓ " + p.name + "  (V" + (vIdx + 1) + " / A" + (aIdx + 1) + ")");
   } catch (e) {
     status(e.message || String(e), "err");
   } finally {
@@ -256,20 +286,13 @@ async function captureFromSelection() {
   busy = true;
   try {
     const { seq, frame } = await getContext();
-    const selV = [], selA = [], allV = [], allA = [];
+    // Només es lligen sencers els clips seleccionats: en una seqüència llarga, llegir-los tots és lent.
+    const selV = [], selA = [];
     await forEachTrack(seq, "video", async (track, i) => {
-      for (const it of await trackItems(track)) {
-        const info = await itemInfo(it, i);
-        allV.push(info);
-        if (await it.getIsSelected()) selV.push(info);
-      }
+      for (const it of await trackItems(track)) if (await it.getIsSelected()) selV.push(await itemInfo(it, i));
     });
     await forEachTrack(seq, "audio", async (track, i) => {
-      for (const it of await trackItems(track)) {
-        const info = await itemInfo(it, i);
-        allA.push(info);
-        if (await it.getIsSelected()) selA.push(info);
-      }
+      for (const it of await trackItems(track)) if (await it.getIsSelected()) selA.push(await itemInfo(it, i));
     });
     if (!selV.length && !selA.length) throw new Error("Selecciona a la timeline el vídeo i el so de la ràfega.");
 
@@ -280,9 +303,10 @@ async function captureFromSelection() {
     if (!video && !sound) throw new Error("No he trobat cap so diferent del vídeo a la selecció.");
     if ((video && !video.path) || (sound && !sound.path)) throw new Error("Algun clip seleccionat no és un fitxer de media (gràfic, seqüència niada…).");
 
-    const near = (x, y) => Math.abs(x - y) <= frame / 2;
-    const videoHasAudio = !!video && allA.some((a) => samePath(a.path, video.path) && near(a.start, video.start));
-    const soundHasVideo = !!sound && allV.some((v) => samePath(v.path, sound.path) && near(v.start, sound.start));
+    // El vídeo porta àudio propi (o el so porta imatge) si a la timeline hi ha, al mateix punt,
+    // un clip del mateix fitxer a les pistes de l'altre tipus.
+    const videoHasAudio = !!video && (await findPlaced(seq, "audio", video.path, video.start, frame)).length > 0;
+    const soundHasVideo = !!sound && (await findPlaced(seq, "video", sound.path, sound.start, frame)).length > 0;
 
     const strip = (x) => x && { path: x.path, name: x.name, inP: x.inP, outP: x.outP, track: x.track };
     const preset = {
@@ -406,21 +430,25 @@ function render() {
   });
 }
 
-async function refreshTracks() {
+function fillTrackSelects(vc, ac) {
   const fill = (sel, prefix, count, current) => {
     let html = '<option value="preset">Com al preset</option>';
     for (let i = 0; i < count; i++) html += '<option value="' + i + '">' + prefix + (i + 1) + "</option>";
     sel.innerHTML = html;
     sel.value = current !== "preset" && Number(current) < count ? String(current) : "preset";
   };
+  fill($("vDest"), "V", vc, settings.vDest);
+  fill($("aDest"), "A", ac, settings.aDest);
+}
+
+async function refreshTracks() {
   let vc = 8, ac = 8;
   try {
     const { seq } = await getContext();
     vc = await seq.getVideoTrackCount();
     ac = await seq.getAudioTrackCount();
   } catch (e) { /* sense seqüència: llista genèrica */ }
-  fill($("vDest"), "V", vc, settings.vDest);
-  fill($("aDest"), "A", ac, settings.aDest);
+  fillTrackSelects(vc, ac);
 }
 
 // ------------------------------------------------------- exportar / importar

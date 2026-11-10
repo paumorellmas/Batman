@@ -46,3 +46,6 @@ Es desa: quin fitxer, quin tram (in/out), la pista i el desfasament entre vídeo
   la ràfega carregada al Source Monitor quan l'apliques.
 - La velocitat/efectes dels clips no es copien: només el tram i la posició.
 - La primera vegada pot corregir sol una diferència d'un fotograma en la durada.
+- Si el fitxer de so té imatge i no hi ha cap pista de vídeo lliure en eixe tram, el panell
+  avisa i no col·loca res: afig una pista de vídeo buida i torna-ho a provar.
+- Si la pista triada dalt (Vídeo / Àudio) no existeix a la seqüència activa, s'usa la del preset.

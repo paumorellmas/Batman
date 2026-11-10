@@ -44,3 +44,7 @@ Títol, autors, intèrpret i editora es llegeixen de les metadades de l'arxiu (I
 - `panel/js/main.js`: interfície.
 
 `npm test` passa les proves. Obrint `panel/index.html` en un navegador es veu el panell amb una seqüència d'exemple.
+
+# Ràfegues — panell UXP
+
+A `rafegues-panel/` hi ha un segon panell, independent del de música: desa combinacions de vídeo de ràfega + so i les col·loca al cursor amb un clic o una tecla. Les instruccions són a `rafegues-panel/LLEGEIX-ME.md`. `test/rafegues.test.js` l'executa contra un Premiere simulat.
